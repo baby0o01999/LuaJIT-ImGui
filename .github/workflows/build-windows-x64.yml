@@ -1,0 +1,56 @@
+name: build-windows-x64
+
+on:
+  push:
+    branches: [docking_inter]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install GLFW via vcpkg
+        shell: pwsh
+        run: |
+          vcpkg install glfw3:x64-windows
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S . -B build-win64 -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DIMPL_SDL=OFF `
+            -DIMPL_SDL3=OFF `
+            -DIMPL_OPENGL2=OFF
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build build-win64 --config Release
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          Get-ChildItem -Path build-win64 -Filter *.dll -Recurse | Copy-Item -Destination artifacts -Force
+          Get-ChildItem -Path build-win64 -Filter *.lib -Recurse | Copy-Item -Destination artifacts -Force
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaJIT-ImGui-windows-x64
+          path: artifacts
+          if-no-files-found: error
