@@ -5,7 +5,7 @@ local win = igwin:GLFW(800,400, "widgets",{vsync=true})
 
 local ig = win.ig
 local ffi = require"ffi"
-local serializer = require"serializer"
+local serializer = require"libs.serializer"
 
 local function Link()
     local link = {id=0,start_attr=ffi.new("int[?]",1),end_attr=ffi.new("int[?]",1)}
@@ -103,7 +103,7 @@ local function show_editor(editor)
     ig.TextUnformatted("X -- delete selected node or link");
     ig.imnodes_BeginNodeEditor();
 
-    local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_A)
+    local user_key = ig.lib.ImGuiKey_A
     local open_popup
     if (ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and
         ig.imnodes_IsEditorHovered() and ig.IsKeyReleased(user_key))
@@ -122,7 +122,7 @@ local function show_editor(editor)
         end
         ig.EndPopup()
     end
-
+	ig.PopStyleVar()
 
     for _, node in pairs(editor.nodes) do
         node:draw()
@@ -162,7 +162,7 @@ local function show_editor(editor)
     end
     
     local dodelete = false
-    local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_X)
+    local user_key = ig.lib.ImGuiKey_X
     if ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and
         --ig.imnodes_IsEditorHovered() and 
         ig.IsKeyReleased(user_key)
@@ -262,7 +262,8 @@ local function Editor(name, nodetypes)
     function E:load_str(str)
         self.nodes = {}
         self.links = {}
-        local f = loadstring(str)
+        local f,err = loadstring(str)
+		assert(f,err)
         setfenv(f,setmetatable({ig=ig},{ __index = _G}))
         local loadedE = f()
         for k,v in pairs(loadedE.nodes) do

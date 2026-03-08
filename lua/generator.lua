@@ -1,90 +1,30 @@
+package.path = package.path..";../cimgui/generator/?.lua"
+local cpp2ffi = require"cpp2ffi"
+local save_data = cpp2ffi.save_data
+local read_data = cpp2ffi.read_data
+local location = cpp2ffi.location
+----------comand line
+local script_args = {...}
+local FREETYPE_GENERATION = script_args[1]:match("freetype") and true or false
+local WCHAR32_GENERATION = script_args[1]:match("wchar32") and true or false
+
+----------------------------------
 ----utility functions
-local function save_data(filename,...)
-    local file,err = io.open(filename,"w")
-    if not file then error(err) end
-    for i=1, select('#', ...) do
-        local data = select(i, ...)
-        file:write(data)
-    end
-    file:close()
-end
-----------------------------------------
-local function  read_data(filename)
-    local hfile,err = io.open(filename,"r")
-    if not hfile then error(err) end
-    local hstrfile = hfile:read"*a"
-    hfile:close()
-    return hstrfile
-end
-
---iterates lines from a gcc -E in a specific location
-local function location(file,locpathT)
-    local location_re = '^# (%d+) "([^"]*)"'
-    local path_reT = {}
-    for i,locpath in ipairs(locpathT) do
-        table.insert(path_reT,'^(.*[\\/])('..locpath..')%.h$')
-    end
-    local in_location = false
-    local which_location = ""
-	local loc_num
-	local loc_num_incr
-	local lineold = "" 
-	local which_locationold,loc_num_realold
-	local lastdumped = false
-    local function location_it()
-        repeat
-            local line = file:read"*l"
-            if not line then
-				if not lastdumped then
-					lastdumped = true
-					return lineold, which_locationold,loc_num_realold
-				else
-					return nil
-				end
-			end
-            if line:sub(1,1) == "#" then
-                -- Is this a location pragma?
-                local loc_num_t,location_match = line:match(location_re)
-                if location_match then
-                    in_location = false
-                    for i,path_re in ipairs(path_reT) do
-                        if location_match:match(path_re) then 
-                            in_location = true;
-							loc_num = loc_num_t
-							loc_num_incr = 0
-                            which_location = locpathT[i]
-                            break 
-                        end
-                    end
-                end
-            elseif in_location then
-				local loc_num_real = loc_num + loc_num_incr
-				loc_num_incr = loc_num_incr + 1
-				if loc_num_realold and loc_num_realold < loc_num_real then
-					--old line complete
-					local lineR,which_locationR,loc_num_realR = lineold, which_locationold,loc_num_realold
-					lineold, which_locationold,loc_num_realold = line,which_location,loc_num_real
-					return lineR,which_locationR,loc_num_realR
-				else
-					lineold=lineold..line
-					which_locationold,loc_num_realold = which_location,loc_num_real
-                --return line,loc_num_real, which_location
-				end
-            end
-        until false
-    end
-    return location_it
-end
-
 local function get_cdefs(gccline,locat,cdef)
 	cdef = cdef or {}
 	local pipe,err = io.popen(gccline,"r")
 	if not pipe then error("could not execute gcc "..err) end
-
+	local skip
 	for line in location(pipe,{locat}) do
 		line = line:gsub("extern __attribute__%(%(dllexport%)%)%s*","")
 		line = line:gsub("extern __declspec%(dllexport%)%s*","")
-		if line~="" then table.insert(cdef,line) end
+		skip = false
+		if line~="" then 
+			if line:match("^%s*static const") and not line:match("static const int") then skip=true end
+			if not skip then
+				table.insert(cdef,line) 
+			end
+		end
 	end
 	pipe:close()
 	return cdef
@@ -94,7 +34,9 @@ local function get_all_cdefs(sources)
 	local cdefs = {}
 	for i,v in ipairs(sources) do
 		print("get cdefs from",v)
-		cdefs = get_cdefs([[gcc -E -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS -I "../cimgui" ]].."../"..v.."/"..v..".h",v,cdefs)
+		local def_ft = FREETYPE_GENERATION and " -DIMGUI_ENABLE_FREETYPE -DIMGUI_ENABLE_STB_TRUETYPE " or ""
+		local def_w32 = WCHAR32_GENERATION and " -DIMGUI_USE_WCHAR32 " or ""
+		cdefs = get_cdefs([[gcc -E ]]..def_ft..def_w32..[[-DCIMGUI_DEFINE_ENUMS_AND_STRUCTS -I "../cimgui" ]].."../"..v.."/"..v..".h",v,cdefs)
 	end
 	return cdefs
 end
@@ -102,11 +44,11 @@ end
 --------------------------------------------------------
 --first get cdefs
 print"get cdefs"
-local sources = {"cimgui", "cimplot", "cimguizmo", "cimguizmo_quat", "cimnodes","cimnodes_r"}
+local sources = {"cimgui", "cimplot", "cimguizmo", "cimguizmo_quat", "cimnodes","cimnodes_r","cimCTE","cimplot3d"}
 local cdefs = get_all_cdefs(sources)
 
 print"get cimgui_impl cdefs"
-cdefs = get_cdefs([[gcc -E -DCIMGUI_API="" ../cimgui/generator/output/cimgui_impl.h]],"cimgui_impl",cdefs)
+cdefs = get_cdefs([[gcc -E -DCIMGUI_API="" -DCIMGUI_USE_OPENGL3 -DCIMGUI_USE_SDL2 -DCIMGUI_USE_SDL3 -DCIMGUI_USE_GLFW -DCIMGUI_USE_OPENGL2 -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS ../cimgui/cimgui_impl.h]],"cimgui_impl",cdefs)
 
 table.insert(cdefs,1,"typedef void FILE;")
 
@@ -148,18 +90,26 @@ table.insert(cdefs,2,"--[[ BEGIN AUTOGENERATED SEGMENT ]]\n cdecl = cdecl .. [["
 table.insert(cdefs,"]]\n--[[ END AUTOGENERATED SEGMENT ]]\n")
 local hstrfile = read_data"./imgui_base_cdefs.lua"
 save_data("./imgui/cdefs.lua",table.concat(cdefs,"\n"), hstrfile)
-
+print"generate classes"
+local class_gen = require"class_gen"
+local classes = class_gen(sources, FREETYPE_GENERATION)
 ----- generate imgui/glfw.lua
 print"save glfw.lua"
-local class_gen = require"class_gen"
-local classes = class_gen(sources)
 local iniclass = "local cimguimodule = 'cimgui_glfw' --set imgui directory location\n"
 local base = read_data("./imgui_base.lua")
-save_data("./imgui/glfw.lua",iniclass, base, classes)
+local base_glfw = read_data("./imgui_base_glfw.lua")
+save_data("./imgui/glfw.lua",iniclass, base, base_glfw, classes)
 
 ----- generate imgui/sdl.lua
 print"save sdl.lua"
 local iniclass = "local cimguimodule = 'cimgui_sdl' --set imgui directory location\n"
-save_data("./imgui/sdl.lua",iniclass, base, classes)
+local base_sdl = read_data("./imgui_base_sdl.lua")
+save_data("./imgui/sdl.lua",iniclass, base, base_sdl, classes)
+
+----- generate imgui/sdl3.lua
+print"save sdl3.lua"
+local iniclass = "local cimguimodule = 'cimgui_sdl3' --set imgui directory location\n"
+local base_sdl3 = read_data("./imgui_base_sdl3.lua")
+save_data("./imgui/sdl3.lua",iniclass, base, base_sdl3, classes)
 
 print"-----------------------------done generation"

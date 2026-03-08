@@ -1,5 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
 Project(cimgui)
-cmake_minimum_required(VERSION 2.8)
+set (CMAKE_CXX_STANDARD 14) #needed by santaclose/ImGuiColorTextEdit
+
 if(WIN32) #to mingw work as all the others
 set(CMAKE_SHARED_LIBRARY_PREFIX "")
 endif(WIN32)
@@ -7,11 +9,14 @@ endif(WIN32)
 include_directories(cimgui/imgui)
 include_directories(cimplot/implot)
 include_directories(cimguizmo/ImGuizmo)
-include_directories(./cimguizmo_quat/imGuIZMO.quat/imGuIZMO.quat)
+include_directories(./cimguizmo_quat/imGuIZMO.quat/imguizmo_quat)
 include_directories(cimnodes/imnodes)
-#add_definitions("-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=1")
+add_definitions("-DIMGUI_USER_CONFIG=\"../cimconfig.h\"")
+add_definitions("-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=1")
 add_definitions(-DIMNODES_NAMESPACE=imnodes)
 include_directories(cimgui)
+add_subdirectory(cimCTE)
+include_directories(${cimCTE_inc})
 set(IMGUI_SOURCES ./cimgui/cimgui.cpp 
 ./cimgui/imgui/imgui.cpp 
 ./cimgui/imgui/imgui_draw.cpp 
@@ -24,12 +29,18 @@ set(IMGUI_SOURCES ./cimgui/cimgui.cpp
 ./cimguizmo/cimguizmo.cpp
 ./cimguizmo/ImGuizmo/ImGuizmo.cpp
 ./cimguizmo_quat/cimguizmo_quat.cpp
-./cimguizmo_quat/imGuIZMO.quat/imGuIZMO.quat/imGuIZMOquat.cpp  
+./cimguizmo_quat/imGuIZMO.quat/imguizmo_quat/imGuIZMOquat.cpp  
 ./cimnodes/cimnodes.cpp
 ./cimnodes/imnodes/imnodes.cpp
 ./cimnodes_r/cimnodes_r.cpp
 ./cimnodes_r/ImNodes/ImNodes.cpp
 ./cimnodes_r/ImNodes/ImNodesEz.cpp
+./cimplot3d/cimplot3d.cpp
+./cimplot3d/implot3d/implot3d.cpp
+./cimplot3d/implot3d/implot3d_demo.cpp
+./cimplot3d/implot3d/implot3d_items.cpp
+./cimplot3d/implot3d/implot3d_meshes.cpp
+${cimCTE_SRCS}
 )
 
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui_tables.cpp)
@@ -37,14 +48,15 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui_tables.cpp)
 endif()
 
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/backends)
-	set(BAKENDS_FOLDER "./cimgui/imgui/backends/")
+	set(BACKENDS_FOLDER "./cimgui/imgui/backends/")
 else()
-	set(BAKENDS_FOLDER "./cimgui/imgui/examples/")
+	set(BACKENDS_FOLDER "./cimgui/imgui/examples/")
 endif()
 
 
 set(IMGUI_SOURCES_glfw)
 set(IMGUI_SOURCES_sdl)
+set(IMGUI_SOURCES_sdl3)
 set(IMGUI_LIBRARIES )
 set(IMGUI_ft_LIBRARIES )
 
@@ -60,6 +72,7 @@ add_definitions("-DIMGUIZMO_IMGUI_FOLDER=")
 #optional adding implementations
 option(IMPL_GLFW "add GLFW implementation" ON)
 option(IMPL_SDL "add SDL implementation" ON)
+option(IMPL_SDL3 "add SDL3 implementation" ON)
 option(IMPL_OPENGL2 "add OPENGL2 implementation" ON)
 option(IMPL_OPENGL3 "add OPENGL3 implementation" ON)
 option(IMGUI_FREETYPE "add Freetype2" OFF)
@@ -67,15 +80,17 @@ option(IMPL_EXTRAS "knob and curve" ON)
 
 
 if(IMGUI_FREETYPE)
+	message(STATUS "Building with freetype")
+	if (DEFINED FREETYPE_PATH)
 	FIND_PACKAGE(freetype REQUIRED PATHS ${FREETYPE_PATH})
+	endif (DEFINED FREETYPE_PATH)
 	list(APPEND IMGUI_ft_LIBRARIES freetype)
 	list(APPEND IMGUI_LIBRARIES freetype)
 	list(APPEND IMGUI_SOURCES ./cimgui/imgui/misc/freetype/imgui_freetype.cpp)
-	add_definitions("-DCIMGUI_FREETYPE=1")
 endif(IMGUI_FREETYPE)
 
 if(IMPL_OPENGL3)
-    list(APPEND IMGUI_SOURCES ${BAKENDS_FOLDER}imgui_impl_opengl3.cpp)
+    list(APPEND IMGUI_SOURCES ${BACKENDS_FOLDER}imgui_impl_opengl3.cpp)
     #./cimgui/imgui/examples/libs/gl3w/GL/gl3w.c)
     #list(APPEND IMGUI_SOURCES ./extras/cimgui_extras.cpp) #Do_gl3winit not needed
     #include_directories(cimgui/imgui/examples/libs/gl3w)
@@ -87,7 +102,7 @@ if(IMPL_OPENGL3)
 endif(IMPL_OPENGL3)
 
 if(IMPL_OPENGL2)
-    list(APPEND IMGUI_SOURCES ${BAKENDS_FOLDER}imgui_impl_opengl2.cpp)
+    list(APPEND IMGUI_SOURCES ${BACKENDS_FOLDER}imgui_impl_opengl2.cpp)
     if(WIN32)
         list(APPEND IMGUI_LIBRARIES opengl32)
 	else(WIN32)#Unix
@@ -100,6 +115,16 @@ if(IMPL_EXTRAS)
 endif(IMPL_EXTRAS)
 
 add_library(cimgui_base OBJECT ${IMGUI_SOURCES})
+
+if(IMGUI_FREETYPE)
+	target_compile_definitions(cimgui_base PUBLIC IMGUI_ENABLE_FREETYPE)
+	target_compile_definitions(cimgui_base PUBLIC IMGUI_ENABLE_STB_TRUETYPE)
+endif(IMGUI_FREETYPE)
+
+if(IMGUI_WCHAR32)
+	target_compile_definitions(cimgui_base PUBLIC IMGUI_USE_WCHAR32)
+endif(IMGUI_WCHAR32)
+
 target_link_libraries(cimgui_base PUBLIC ${IMGUI_ft_LIBRARIES})
 
 if(UNIX)
@@ -108,9 +133,9 @@ endif(UNIX)
 
 
 if(IMPL_GLFW)
-    list(APPEND IMGUI_SOURCES_glfw ${BAKENDS_FOLDER}imgui_impl_glfw.cpp)
+    list(APPEND IMGUI_SOURCES_glfw ${BACKENDS_FOLDER}imgui_impl_glfw.cpp)
 	if (DEFINED GLFW_PATH)
-		message(STATUS GLFW_PATH defined as ${GLFW_PATH})
+		message(STATUS "GLFW_PATH defined as " ${GLFW_PATH})
         FIND_PACKAGE(glfw3 3.2 REQUIRED PATHS ${GLFW_PATH})
 		message( glfw include is ${GLFW_INCLUDE})
 	else (DEFINED GLFW_PATH)
@@ -127,7 +152,7 @@ if(IMPL_GLFW)
 endif(IMPL_GLFW)
 
 if(IMPL_SDL)
-    list(APPEND IMGUI_SOURCES_sdl ${BAKENDS_FOLDER}imgui_impl_sdl.cpp)
+    list(APPEND IMGUI_SOURCES_sdl ${BACKENDS_FOLDER}imgui_impl_sdl2.cpp)
 	if(DEFINED SDL_PATH)
 		message(STATUS "SDL_PATH defined as " ${SDL_PATH})
 		FIND_PACKAGE(SDL2 REQUIRED PATHS ${SDL_PATH})
@@ -155,6 +180,36 @@ if(IMPL_SDL)
               #ARCHIVE DESTINATION lib 
               )
 endif(IMPL_SDL)
+
+if(IMPL_SDL3)
+    list(APPEND IMGUI_SOURCES_sdl3 ${BACKENDS_FOLDER}imgui_impl_sdl3.cpp)
+	if(DEFINED SDL3_PATH)
+		message(STATUS "SDL3_PATH defined as " ${SDL3_PATH})
+		FIND_PACKAGE(SDL3 REQUIRED CONFIG COMPONENTS Headers PATHS ${SDL3_PATH})
+		message(STATUS "sdl3found")
+		get_target_property(SDL3_INCLUDE SDL3::Headers INTERFACE_INCLUDE_DIRECTORIES)
+		message(STATUS "sdl3include is " ${SDL3_INCLUDE} )
+		#if not found latest SDL3 cmake config use older
+		if (("${SDL3_INCLUDE}" STREQUAL "") OR ("${SDL3_INCLUDE}" STREQUAL "SDL3_INCLUDE-NOTFOUND"))
+			message(STATUS "sdl3include2 is " SDL3::Headers)
+			include_directories(SDL3::Headers)
+			set(IMGUI_SDL3_LIBRARY SDL3::SDL3)
+		else()#use new one SDL2 config
+			include_directories(${SDL_INCLUDE})
+			set(IMGUI_SDL3_LIBRARY SDL3::SDL3)
+		endif()
+	else(DEFINED SDL3_PATH) #using SDL3 submodule from anima
+		message(STATUS "SDL3_PATH not defined")
+		set(IMGUI_SDL3_LIBRARY SDL3::SDL3)
+	endif(DEFINED SDL3_PATH)
+	add_library(cimgui_sdl3 SHARED  ${IMGUI_SOURCES_sdl3} $<TARGET_OBJECTS:cimgui_base>)
+	target_link_libraries(cimgui_sdl3 PUBLIC ${IMGUI_LIBRARIES} ${IMGUI_SDL3_LIBRARY})
+	install(TARGETS cimgui_sdl3
+              RUNTIME DESTINATION  ${LUAJIT_BIN}
+              LIBRARY DESTINATION  ${LUAJIT_BIN}
+              #ARCHIVE DESTINATION lib 
+              )
+endif(IMPL_SDL3)
 
 
 #install

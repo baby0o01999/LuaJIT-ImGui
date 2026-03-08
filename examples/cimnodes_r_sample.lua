@@ -4,7 +4,7 @@ local win = igwin:SDL(800,400, "cimnodes_r",{vsync=true})
 --local win = igwin:GLFW(800,400, "cimnodes_r",{vsync=true})
 local ig = win.ig
 local ffi = require"ffi"
-local serializer = require"serializer"
+local serializer = require"libs.serializer"
 
 local function Connection()
     local link = {
@@ -76,7 +76,7 @@ local function Node(value,editor,typen,loadT)
         ig.ImNodes_Ez_EndNode();
         
         local dodelete = false
-        local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_X)
+        local user_key = ig.lib.ImGuiKey_X
         if ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and ig.IsKeyReleased(user_key)
         then
             dodelete = true
@@ -109,17 +109,23 @@ local function show_editor(editor)
         end
         print("current_id",editor.current_id)
     end
+	ig.SameLine()
+	local ZoomPtr = ffi.cast("float*", ffi.cast("char*",ig.ImNodes_Ez_GetState()) + ffi.offsetof("CanvasState","Zoom"))
+	ig.SliderFloat("Zoom",ZoomPtr,0.25,5)
 
     ig.TextUnformatted("A -- add node");
-    ig.TextUnformatted("X -- delete selected node or link");
+    ig.TextUnformatted("X -- delete selected node");
+    ig.TextUnformatted("double left click to delete connection");
 
-    ig.ImNodes_BeginCanvas(editor.context);
+    --ig.ImNodes_BeginCanvas(editor.context);
+	ig.ImNodes_Ez_SetContext(editor.context)
+	ig.ImNodes_Ez_BeginCanvas();
 
     for _, node in pairs(editor.nodes) do
         node:draw()
     end
     
-    local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_A)
+    local user_key = ig.lib.ImGuiKey_A
     if (ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and ig.IsKeyReleased(user_key))
     then
         ig.OpenPopup("add node")
@@ -135,7 +141,8 @@ local function show_editor(editor)
         end
         ig.EndPopup()
     end
-    ig.ImNodes_EndCanvas()
+    --ig.ImNodes_EndCanvas()
+	ig.ImNodes_Ez_EndCanvas()
     ig.End();
 end
 local function Editor(name, nodetypes)
@@ -185,7 +192,8 @@ local function Editor(name, nodetypes)
     end
     function E:load_str(str)
         self.nodes = {}
-        local f = loadstring(str)
+        local f,err = loadstring(str)
+		assert(f,er)
         setfenv(f,setmetatable({ig=ig},{ __index = _G}))
         local loadedE = f()
         for k,v in pairs(loadedE.nodes) do
@@ -195,7 +203,8 @@ local function Editor(name, nodetypes)
         self.current_id = loadedE.current_id
         self.name = loadedE.name
     end
-    E.context = ig.CanvasState();
+    --E.context = ig.CanvasState();
+	E.context = ig.ImNodes_Ez_CreateContext();
     return E
 end
 ---------------------------------------use it!!-------------------------------------

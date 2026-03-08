@@ -4,7 +4,7 @@ local igwin = require"imgui.window"
 local win = igwin:GLFW(800,400, "compute graph",{vsync=false})
 local ig = win.ig
 local ffi = require"ffi"
-local serializer = require"serializer"
+local serializer = require"libs.serializer"
 
 local function DFS(G,v)
     G.nodes_explored[v] = true
@@ -214,7 +214,7 @@ local function show_editor(editor)
     ig.TextUnformatted("X -- delete selected node or link");
     ig.imnodes_BeginNodeEditor();
 
-    local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_A)
+    local user_key = ig.lib.ImGuiKey_A
     local open_popup
     if (ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and
         ig.imnodes_IsEditorHovered() and ig.IsKeyReleased(user_key))
@@ -276,7 +276,7 @@ local function show_editor(editor)
     end
     
     local dodelete = false
-    local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_X)
+    local user_key = ig.lib.ImGuiKey_X
     if ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and 
         ig.IsKeyReleased(user_key)
     then

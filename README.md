@@ -2,11 +2,15 @@
 
 ![sample](sample.png)
 
-This is a LuaJIT binding for the excellent C++ intermediate gui [imgui](https://github.com/ocornut/imgui).
+![notepad](https://github.com/user-attachments/assets/2a1f16b6-a88e-446c-ac07-869de5d79129)
+
+This is a LuaJIT binding for the excellent C++ immediate gui [imgui](https://github.com/ocornut/imgui).
 Uses cimgui to be the most "up to date" as possible.
 
+There are backends for glfw, SDL2 and SDL3.
+
 Notes:
-* currently this wrapper is based on version [1.87 docking of imgui]
+* currently this wrapper is based on version [1.92.5 docking of imgui]
 
 # cloning
 

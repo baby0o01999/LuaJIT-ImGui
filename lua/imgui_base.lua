@@ -82,211 +82,6 @@ end
 M.FLT_MAX = lib.igGET_FLT_MAX()
 M.FLT_MIN = lib.igGET_FLT_MIN()
 
------------ImGui_ImplGlfwGL3
-local ImGui_ImplGlfwGL3 = {}
-ImGui_ImplGlfwGL3.__index = ImGui_ImplGlfwGL3
-
-
-function ImGui_ImplGlfwGL3.__new()
-    local ptr = lib.ImGui_ImplGlfwGL3_new()
-    ffi.gc(ptr,lib.ImGui_ImplGlfwGL3_delete)
-    return ptr
-end
-
-function ImGui_ImplGlfwGL3:destroy()
-    ffi.gc(self,nil) --prevent gc twice
-    lib.ImGui_ImplGlfwGL3_delete(self)
-end
-
-function ImGui_ImplGlfwGL3:NewFrame()
-    return lib.ImGui_ImplGlfwGL3_NewFrame(self)
-end
-
-function ImGui_ImplGlfwGL3:Render()
-    return lib.ImGui_ImplGlfwGL3_Render(self)
-end
-
-function ImGui_ImplGlfwGL3:Init(window, install_callbacks)
-    return lib.ImGui_ImplGlfwGL3_Init(self, window,install_callbacks);
-end
-
-function ImGui_ImplGlfwGL3.KeyCallback(window, key,scancode, action, mods)
-    return lib.ImGui_ImplGlfwGL3_KeyCallback(window, key,scancode, action, mods);
-end
-
-function ImGui_ImplGlfwGL3.MouseButtonCallback(win, button, action, mods)
-    return lib.ImGui_ImplGlfwGL3_MouseButtonCallback(win, button, action, mods)
-end
-
-function ImGui_ImplGlfwGL3.ScrollCallback(window,xoffset,yoffset)
-    return lib.ImGui_ImplGlfwGL3_MouseButtonCallback(window,xoffset,yoffset)
-end
-
-function ImGui_ImplGlfwGL3.CharCallback(window,c)
-    return lib.ImGui_ImplGlfwGL3_CharCallback(window, c);
-end
-
-M.ImplGlfwGL3 = ffi.metatype("ImGui_ImplGlfwGL3",ImGui_ImplGlfwGL3)
-
------------------------Imgui_Impl_SDL_opengl3
-local Imgui_Impl_SDL_opengl3 = {}
-Imgui_Impl_SDL_opengl3.__index = Imgui_Impl_SDL_opengl3
-
-function Imgui_Impl_SDL_opengl3.__call()
-    return setmetatable({ctx = lib.igCreateContext(nil)},Imgui_Impl_SDL_opengl3)
-end
-
-function Imgui_Impl_SDL_opengl3:Init(window, gl_context, glsl_version)
-    self.window = window
-	glsl_version = glsl_version or "#version 130"
-    lib.ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
-    lib.ImGui_ImplOpenGL3_Init(glsl_version);
-end
-
-function Imgui_Impl_SDL_opengl3:destroy()
-    lib.ImGui_ImplOpenGL3_Shutdown();
-    lib.ImGui_ImplSDL2_Shutdown();
-    lib.igDestroyContext(self.ctx);
-end
-
-function Imgui_Impl_SDL_opengl3:NewFrame()
-    lib.ImGui_ImplOpenGL3_NewFrame();
-    lib.ImGui_ImplSDL2_NewFrame();
-    lib.igNewFrame();
-end
-
-function Imgui_Impl_SDL_opengl3:Render()
-    lib.igRender()
-    lib.ImGui_ImplOpenGL3_RenderDrawData(lib.igGetDrawData());
-end
-M.Imgui_Impl_SDL_opengl3 = setmetatable({},Imgui_Impl_SDL_opengl3)
------------------------Imgui_Impl_SDL_opengl2
-local Imgui_Impl_SDL_opengl2 = {}
-Imgui_Impl_SDL_opengl2.__index = Imgui_Impl_SDL_opengl2
-
-function Imgui_Impl_SDL_opengl2.__call()
-    return setmetatable({ctx = lib.igCreateContext(nil)},Imgui_Impl_SDL_opengl2)
-end
-
-function Imgui_Impl_SDL_opengl2:Init(window, gl_context)
-    self.window = window
-    lib.ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
-    lib.ImGui_ImplOpenGL2_Init();
-end
-
-function Imgui_Impl_SDL_opengl2:destroy()
-    lib.ImGui_ImplOpenGL2_Shutdown();
-    lib.ImGui_ImplSDL2_Shutdown();
-    lib.igDestroyContext(self.ctx);
-end
-
-function Imgui_Impl_SDL_opengl2:NewFrame()
-    lib.ImGui_ImplOpenGL2_NewFrame();
-    lib.ImGui_ImplSDL2_NewFrame();
-    lib.igNewFrame();
-end
-
-function Imgui_Impl_SDL_opengl2:Render()
-    lib.igRender()
-    lib.ImGui_ImplOpenGL2_RenderDrawData(lib.igGetDrawData());
-end
-M.Imgui_Impl_SDL_opengl2 = setmetatable({},Imgui_Impl_SDL_opengl2)
------------------------Imgui_Impl_glfw_opengl3
-local Imgui_Impl_glfw_opengl3 = {}
-Imgui_Impl_glfw_opengl3.__index = Imgui_Impl_glfw_opengl3
-
-function Imgui_Impl_glfw_opengl3.__call()
-    return setmetatable({ctx = lib.igCreateContext(nil)},Imgui_Impl_glfw_opengl3)
-end
-
-function Imgui_Impl_glfw_opengl3:Init(window, install_callbacks,glsl_version)
-	glsl_version = glsl_version or "#version 130"
-    lib.ImGui_ImplGlfw_InitForOpenGL(window, install_callbacks);
-    lib.ImGui_ImplOpenGL3_Init(glsl_version);
-end
-
-function Imgui_Impl_glfw_opengl3:destroy()
-    lib.ImGui_ImplOpenGL3_Shutdown();
-    lib.ImGui_ImplGlfw_Shutdown();
-    lib.igDestroyContext(self.ctx);
-end
-
-function Imgui_Impl_glfw_opengl3:NewFrame()
-    lib.ImGui_ImplOpenGL3_NewFrame();
-    lib.ImGui_ImplGlfw_NewFrame();
-    lib.igNewFrame();
-end
-
-function Imgui_Impl_glfw_opengl3:Render()
-    lib.igRender()
-    lib.ImGui_ImplOpenGL3_RenderDrawData(lib.igGetDrawData());
-end
-
-function Imgui_Impl_glfw_opengl3.KeyCallback(window, key,scancode, action, mods)
-    return lib.ImGui_ImplGlfw_KeyCallback(window, key,scancode, action, mods);
-end
-
-function Imgui_Impl_glfw_opengl3.MouseButtonCallback(win, button, action, mods)
-    return lib.ImGui_ImplGlfw_MouseButtonCallback(win, button, action, mods)
-end
-
-function Imgui_Impl_glfw_opengl3.ScrollCallback(window,xoffset,yoffset)
-    return lib.ImGui_ImplGlfw_ScrollCallback(window,xoffset,yoffset)
-end
-
-function Imgui_Impl_glfw_opengl3.CharCallback(window,c)
-    return lib.ImGui_ImplGlfw_CharCallback(window, c);
-end
-
-M.Imgui_Impl_glfw_opengl3 = setmetatable({},Imgui_Impl_glfw_opengl3)
-
------------------------Imgui_Impl_glfw_opengl2
-local Imgui_Impl_glfw_opengl2 = {}
-Imgui_Impl_glfw_opengl2.__index = Imgui_Impl_glfw_opengl2
-
-function Imgui_Impl_glfw_opengl2.__call()
-    return setmetatable({ctx = lib.igCreateContext(nil)},Imgui_Impl_glfw_opengl2)
-end
-
-function Imgui_Impl_glfw_opengl2:Init(window, install_callbacks)
-    lib.ImGui_ImplGlfw_InitForOpenGL(window, install_callbacks);
-    lib.ImGui_ImplOpenGL2_Init();
-end
-
-function Imgui_Impl_glfw_opengl2:destroy()
-    lib.ImGui_ImplOpenGL2_Shutdown();
-    lib.ImGui_ImplGlfw_Shutdown();
-    lib.igDestroyContext(self.ctx);
-end
-
-function Imgui_Impl_glfw_opengl2:NewFrame()
-    lib.ImGui_ImplOpenGL2_NewFrame();
-    lib.ImGui_ImplGlfw_NewFrame();
-    lib.igNewFrame();
-end
-
-function Imgui_Impl_glfw_opengl2:Render()
-    lib.igRender()
-    lib.ImGui_ImplOpenGL2_RenderDrawData(lib.igGetDrawData());
-end
-
-function Imgui_Impl_glfw_opengl2.KeyCallback(window, key,scancode, action, mods)
-    return lib.ImGui_ImplGlfw_KeyCallback(window, key,scancode, action, mods);
-end
-
-function Imgui_Impl_glfw_opengl2.MouseButtonCallback(win, button, action, mods)
-    return lib.ImGui_ImplGlfw_MouseButtonCallback(win, button, action, mods)
-end
-
-function Imgui_Impl_glfw_opengl2.ScrollCallback(window,xoffset,yoffset)
-    return lib.ImGui_ImplGlfw_ScrollCallback(window,xoffset,yoffset)
-end
-
-function Imgui_Impl_glfw_opengl2.CharCallback(window,c)
-    return lib.ImGui_ImplGlfw_CharCallback(window, c);
-end
-
-M.Imgui_Impl_glfw_opengl2 = setmetatable({},Imgui_Impl_glfw_opengl2)
 -----------------------another Log
 local Log = {}
 Log.__index = Log
@@ -303,6 +98,7 @@ function Log:Draw(title)
     lib.Log_Draw(self,title)
 end
 M.Log = ffi.metatype("Log",Log)
+
 ------------convenience function
 function M.U32(a,b,c,d) return lib.igGetColorU32_Vec4(ImVec4(a,b,c,d or 1)) end
 
@@ -325,7 +121,7 @@ function M.quat_cast(f)
 end
 function M.quat_pos_cast(f)
 	local nonUDT_out = ffi.new("quat")
-	local nonUDT_pos = ffi.new("G3Dvec3")
+	local nonUDT_pos = ffi.new("vec3")
 	lib.quat_pos_cast(f,nonUDT_out,nonUDT_pos)
 	return nonUDT_out,nonUDT_pos
 end
@@ -428,7 +224,10 @@ function M.Curve(name,numpoints,LUTsize,pressed_on_modified)
 end
 
 
-function M.pad(label,value,sz)
+function M.pad(label,value,sz,minv,maxv)
+	minv = minv or -1
+	maxv = maxv or 1
+	local b = maxv - minv
 	local function clip(val,mini,maxi) return math.min(maxi,math.max(mini,val)) end
 	sz = sz or 200
 	local canvas_pos = M.GetCursorScreenPos();
@@ -441,16 +240,19 @@ function M.pad(label,value,sz)
 		local m = M.GetIO().MousePos
 		local md = M.GetIO().MouseDelta
 		if md.x == 0 and md.y == 0 and not M.IsMouseClicked(0,false) then touched=false end
-		value[0] = ((m.x - canvas_pos.x)/sz)*2 - 1
-		value[1] = (1.0 - (m.y - canvas_pos.y)/sz)*2 - 1
-		value[0] = clip(value[0], -1,1)
-		value[1] = clip(value[1], -1,1)
+		value[0] = ((m.x - canvas_pos.x)/sz)*b + minv
+		value[1] = (1.0 - (m.y - canvas_pos.y)/sz)*b + minv
+		value[0] = clip(value[0], minv,maxv)
+		value[1] = clip(value[1], minv,maxv)
 	end
+	local val0 = (value[0] - minv)/b 
+	local val1 = (value[1] - minv)/b 
 	local draw_list = M.GetWindowDrawList();
 	draw_list:AddRect(canvas_pos,canvas_pos+M.ImVec2(sz,sz),M.U32(1,0,0,1))
 	draw_list:AddLine(canvas_pos + M.ImVec2(0,sz/2),canvas_pos + M.ImVec2(sz,sz/2) ,M.U32(1,0,0,1))
 	draw_list:AddLine(canvas_pos + M.ImVec2(sz/2,0),canvas_pos + M.ImVec2(sz/2,sz) ,M.U32(1,0,0,1))
-	draw_list:AddCircleFilled(canvas_pos + M.ImVec2((1+value[0])*sz,((1-value[1])*sz)+1)*0.5,5,M.U32(1,0,0,1))
+	draw_list:AddCircleFilled(canvas_pos + M.ImVec2(val0*sz,(1-val1)*sz),5,M.U32(1,0,0,1))
+	draw_list:AddText(canvas_pos, M.U32(1,1,1,1), label)
 	return touched
 end
 
@@ -509,5 +311,64 @@ function M.Plotter(xmin,xmax,nvals)
 	Graph:init()
 	return Graph
 end
+------------------- LuaCombo
+function M.LuaCombo(label,strs,action,args)
+    args = args or {}
+    action = action or function() end
+    strs = strs or {"none"}
+    local combo = {}
+    local strings
+    local IDbyname
+    combo.currItem = ffi.new("int[?]",1)
+    local Items, anchors
+    local combowidth
+    local function calcwidth()
+        combowidth = 0
+        for i = 1,#strings  do
+            combowidth = math.max(combowidth, M.CalcTextSize(strings[i]).x)
+        end
+        combowidth = combowidth + M.GetStyle().FramePadding.x * 2.0 + M.GetFrameHeight() --for arrow width!!
+    end
+    function combo:set(strs, ini, newaction)
+        action = newaction and newaction or action
+        anchors = {}
+        IDbyname = {}
+        strings = strs or strings
+        self.currItem[0] = ini and ini-1 or 0
+        Items = ffi.new("const char*[?]",#strings)
+        for i = 0,#strings-1  do
+            anchors[#anchors+1] = ffi.new("const char*",strings[i+1])
+            Items[i] = anchors[#anchors]
+            IDbyname[strings[i+1]] = i+1
+        end
+        if args.calcwidth then combowidth = nil end
+        action(ffi.string(Items[self.currItem[0]]),self.currItem[0]+1)
+    end
+    function combo:set_index(ind)
+        self.currItem[0] = ind and ind-1 or 0
+        action(ffi.string(Items[self.currItem[0]]),self.currItem[0]+1)
+    end
+    function combo:set_name(name)
+        self:set_index(IDbyname[name])
+    end
+    combo:set(strs)
+    function combo:draw()
+        if args.calcwidth then 
+            if not combowidth then calcwidth() end
+            M.SetNextItemWidth(combowidth) 
+        end
+        if M.Combo(label,self.currItem,Items,#strings,-1) then
+            action(ffi.string(Items[self.currItem[0]]),self.currItem[0]+1)
+        end
+    end
+    function combo:get()
+        return ffi.string(Items[self.currItem[0]]),self.currItem[0]+1
+    end
+    function combo:get_name()
+        return ffi.string(Items[self.currItem[0]])
+    end
+    return combo
+end
+
 
 

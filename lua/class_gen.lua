@@ -3,7 +3,7 @@
 -- expects lua 5.1 or luajit
 -- expects "../cimgui/generator/definitions.lua" to be generated in cimgui (master_auto2 branch)
 -----------------------------------------------
-package.path = package.path.."../cimgui/generator/?.lua"
+
 local cpp2ffi = require"cpp2ffi"
 local ffi = require"ffi"
 --utility functions
@@ -19,56 +19,13 @@ local ffi_cdef = function(code)
         error"bad cdef"
     end
 end
-function strsplit(str, pat)
-    local t = {} 
-    local fpat = "(.-)" .. pat
-    local last_end = 1
-    local s, e, cap = str:find(fpat, 1)
-    while s do
-        table.insert(t,cap)
-        last_end = e+1
-        s, e, cap = str:find(fpat, last_end)
-    end
-    if last_end <= #str then
-        cap = str:sub(last_end)
-        table.insert(t, cap)
-    elseif str:sub(-1)==pat then
-        table.insert(t, "")
-    end
-    return t
-end
-function deleteOuterPars(def)
-	local w = def:match("^%b()$")
-	if w then
-		w = w:gsub("^%((.+)%)$","%1")
-		return w
-	else 
-		return def 
-	end
-end
-function CleanImU32(def)
-	def = def:gsub("%(ImU32%)","")
-	--quitar () de numeros
-	def = def:gsub("%((%d+)%)","%1")
-	def = deleteOuterPars(def)
-	local bb=strsplit(def,"|")
-	for i=1,#bb do
-		local val = deleteOuterPars(bb[i])
-		if val:match"<<" then
-			local v1,v2 = val:match("(%d+)%s*<<%s*(%d+)")
-			val = v1*2^v2
-			bb[i] = val
-		end
-		assert(type(bb[i])=="number")
-	end
-	local res = 0 
-	for i=1,#bb do res = res + bb[i] end 
-	return res
-end
+
+local strsplit = cpp2ffi.strsplit
+
 -------------------------------------------------
 -------------------------------------------------
 local enumsvalues = {}
-
+local constants = {}
 
 
 --[[ tests
@@ -107,14 +64,14 @@ local function testcode(codestr)
 end
 
 --this replaces reserved lua words and not valid tokens
-function sanitize_reserved(def)
+local function sanitize_reserved(def)
 	local words = {["in"]="_in",["repeat"]="_repeat"}
 	for k,w in pairs(words) do
 		local pat = "([%(,])("..k..")([,%)])"
-		if def.call_args:match(pat) then
-			--print("found",def.cimguiname,def.call_args,def.call_args:match(pat))
-			def.call_args = def.call_args:gsub(pat,"%1"..w.."%3")
-			--print(def.call_args)
+		if def.call_args_old:match(pat) then
+			--print("found",def.cimguiname,def.call_args_old,def.call_args_old:match(pat))
+			def.call_args_old = def.call_args_old:gsub(pat,"%1"..w.."%3")
+			--print(def.call_args_old)
 			--sanitize defaults
 			if def.defaults[k] then
 				def.defaults[w] = def.defaults[k]
@@ -139,10 +96,14 @@ function sanitize_reserved(def)
 				end
 			elseif enumsvalues[v] then
 				def.defaults[k] = enumsvalues[v]
+			elseif constants[v] then
+				def.defaults[k] = constants[v]
 			else
 				local ok,val = pcall(cpp2ffi.parse_enum_value,v,enumsvalues,true)
+				
 				if ok then
-				def.defaults[k] = val
+					--if v~=val then print("sanitize",k,v,ok,val) end
+					def.defaults[k] = val
 				elseif def.defaults[k]:match"FLT_MAX" then
 					def.defaults[k] = def.defaults[k]:gsub("FLT_MAX","M.FLT_MAX")
 				elseif def.defaults[k]:match"FLT_MIN" then
@@ -158,8 +119,11 @@ function sanitize_reserved(def)
 				def.defaults[k] = def.defaults[k]:gsub("%(%(void%s*%*%)0%)","nil")
 				def.defaults[k] = def.defaults[k]:gsub("NULL","nil")
 				def.defaults[k] = def.defaults[k]:gsub("nullptr","nil")
-				if def.defaults[k]:match"%(ImU32%)" then
-					def.defaults[k] = CleanImU32(def.defaults[k])
+				if def.defaults[k]:match"ImPlotSpec" then
+					def.defaults[k] = "M."..def.defaults[k].."[0]"
+				end
+				if def.defaults[k]:match"ImPlot3DSpec" then
+					def.defaults[k] = "M."..def.defaults[k].."[0]"
 				end
 				end
 				--if def.defaults[k]:match"~" then
@@ -187,20 +151,20 @@ local function make_function(method,def)
 	fname_m = fname_m:match("(.*)_nonUDT$") or fname_m --drop "_nonUDT" suffix
 	if fname_m == "end" then fname_m = "_end" end
 	--dump function code
-	if def.nonUDT == 1 or next(def.defaults) then
-		local call_args = def.call_args:gsub("%*","")
+	if def.nonUDTno == 1 or next(def.defaults) then
+		local call_args_old = def.call_args_old:gsub("%*","")
 		local code = {}
 		local args, fname_lua
-		local empty = call_args:match("^%(%)") --no args
+		local empty = call_args_old:match("^%(%)") --no args
 		if method and not def.is_static_function then
-			args = call_args:gsub("^%(","(self"..(empty and "" or ","))
+			args = call_args_old:gsub("^%(","(self"..(empty and "" or ","))
 			fname_lua = def.stname..":"..fname_m
 			empty = false
 		else
-			args = call_args
+			args = call_args_old
 			fname_lua = "M."..fname_m
 		end
-		table.insert(code,"function "..fname_lua..call_args)
+		table.insert(code,"function "..fname_lua..call_args_old)
 		--set defaults
 		cpp2ffi.table_do_sorted(def.defaults, function(k,v)
 		--for k,v in pairs(def.defaults) do
@@ -215,13 +179,18 @@ local function make_function(method,def)
 			else
 				if v == 'true' then
 					table.insert(code,"    if "..k.." == nil then "..k.." = "..v.." end")
+				--function for init struc ImPlotSpec
+				--elseif type(v)=="string" and v:match("%b()") and not v:match("^\"") and not v:match"sizeof" then
+				--elseif type(v)=="string" and v:match("%b()") and not v:match("^\"") and not v:match"sizeof" then
+					--print("default",v)
+					--table.insert(code,"    "..k.." = "..k.." or M."..v)
 				else
 					table.insert(code,"    "..k.." = "..k.." or "..v)
 				end
 			end
 		--end
 		end)
-		if def.nonUDT == 1 then
+		if def.nonUDTno == 1 then
 			--allocate variable for return value
 			local out_type = def.argsT[1].type:gsub("*", "")
 			table.insert(code,'    local nonUDT_out = ffi.new("'..out_type..'")')
@@ -237,7 +206,7 @@ local function make_function(method,def)
 		table.insert(code,"end")
 		return table.concat(code,"\n")
 	end
-	--for no nonUDT and no defaults
+	--for no nonUDTno and no defaults
 	return (method and def.stname or "M").."."..fname_m.." = lib."..fname
 end
 
@@ -246,11 +215,11 @@ local function constructor_gen(code,def)
 	sanitize_reserved(def)
 	--dump function code
 	if def.cimguiname == def.ov_cimguiname then --default constructor
-		local args = (def.call_args == "()") and "(ctype)" or "(ctype,"..def.call_args:sub(2)
+		local args = (def.call_args_old == "()") and "(ctype)" or "(ctype,"..def.call_args_old:sub(2)
 		table.insert(code,"function "..def.stname..".__new"..args)
 	else
 		local name = def.ov_cimguiname:match(def.stname.."_(.*)") --drop struct name part
-		table.insert(code,"function "..def.stname.."."..name..def.call_args)
+		table.insert(code,"function "..def.stname.."."..name..def.call_args_old)
 	end
 	--set defaults
 	cpp2ffi.table_do_sorted(def.defaults, function(k,v)
@@ -259,7 +228,7 @@ local function constructor_gen(code,def)
 	--end
 	end)
 	local fname = def.ov_cimguiname or def.cimguiname
-	table.insert(code,"    local ptr = lib."..fname..def.call_args)
+	table.insert(code,"    local ptr = lib."..fname..def.call_args_old)
 	table.insert(code,"    return ffi.gc(ptr,lib."..def.stname.."_destroy)")
 	table.insert(code,"end")
 end
@@ -276,35 +245,85 @@ end
 
 local cdefs = dofile("./imgui/cdefs.lua")
 ffi_cdef(cdefs)
-local function checktype(typ,va)
-	if ffi.typeof(typ)==ffi.typeof"int" or 
-		ffi.typeof(typ)==ffi.typeof"const int" or
-		ffi.typeof(typ)==ffi.typeof"float" or
-		ffi.typeof(typ)==ffi.typeof"double" then
-		return "(ffi.istype('"..typ.."',"..va..") or type("..va..")=='number')"
-	elseif ffi.typeof(typ)==ffi.typeof"bool" then
-		return "(ffi.istype('"..typ.."',"..va..") or type("..va..")=='boolean')"
-	elseif ffi.typeof(typ)==ffi.typeof"const char*" then
-		return "(ffi.istype('"..typ.."',"..va..") or ffi.istype('char[]',"..va..") or type("..va..")=='string')"
-	elseif ffi.typeof(typ)==ffi.typeof"const float*" then
-		return "(ffi.istype('"..typ.."',"..va..") or ffi.istype('float[]',"..va.."))"
-	elseif ffi.typeof(typ)==ffi.typeof"const double*" then
-		return "(ffi.istype('"..typ.."',"..va..") or ffi.istype('double[]',"..va.."))"
-	elseif ffi.typeof(typ)==ffi.typeof"int*" then
-		return "(ffi.istype('"..typ.."',"..va..") or ffi.istype('int[]',"..va.."))"
-	elseif ffi.typeof(typ)==ffi.typeof"void*" or ffi.typeof(typ)==ffi.typeof"const void*" then
-		return "ffi.istype('"..typ.."',"..va..")"
-	elseif typ=="ImU32" then
-		return "(ffi.istype('"..typ.."',"..va..") or type("..va..")=='number')"
-	else
-		if typ:match"%*" and not typ:match"%(%*%)" then --pointer not function pointer
-			local typsinptr = typ:gsub("(%*)","")
-			local extra = " or ffi.istype('"..typsinptr.."',"..va..")"
-			local extra2 = " or ffi.istype('"..typsinptr.."[]',"..va..")"
-			return "(ffi.istype('"..typ.."',"..va..")"..extra..extra2..")"
+
+--
+
+-- test for pointers with unsigned-signed confusion and * vs []
+local function GENp(typ,va)
+	local typ2 = typ:gsub("%*","[?]")
+	return "ffi.typeof('"..typ.."') == ffi.typeof("..va..") or ffi.typeof('const "..typ.."') == ffi.typeof("..va..") or ffi.typeof('"..typ2.."') == ffi.typeof("..va..") or ffi.typeof('const "..typ2.."') == ffi.typeof("..va..")"
+end
+--test against type or const type
+local function CHK(typ,ti)
+	--print("CHK",typ,ti)
+	return ffi.typeof(typ) == ffi.typeof(ti) or ffi.typeof(typ) == ffi.typeof("const "..ti)
+end
+
+--not confused by ffi.istype
+local types = {"void *","int8_t","uint8_t","int16_t","uint16_t","int32_t","uint32_t","int64_t","uint64_t","float","double","bool"}
+local function CHK_types(typ,va)
+	for i=1,#types do
+		if CHK(typ,types[i]) then
+			local typ1 = types[i]
+			if typ1=="void *" then
+				return "ffi.istype('"..typ1.."',"..va..")"
+			elseif typ1== "bool" then
+				return "(ffi.istype('"..typ1.."',"..va..") or type("..va..")=='boolean')"
+			else -- let it be a number
+				return "(ffi.istype('"..typ1.."',"..va..") or type("..va..")=='number')"
+			end
 		end
-		return "ffi.istype('"..typ.."',"..va..")"
 	end
+end
+
+--signed unsigned confusion of ffi.istype with pointers
+local UStypes = {"int8_t*","uint8_t*","int16_t*","uint16_t*","int32_t*","uint32_t*","int64_t*","uint64_t*"}
+local function CHK_types_p(typ,va)
+	for i=1,#UStypes do
+		if CHK(typ,UStypes[i]) then
+			return GENp(UStypes[i],va)
+		end
+	end
+end
+
+--not signed unsigned confusion of ffi.istype with pointers
+local Ptypes = {"float*","double*","bool*"}
+local function CHK_types_p2(typ,va)
+	for i=1,#Ptypes do
+		if CHK(typ,Ptypes[i]) then
+			local typ1 = Ptypes[i]
+			local typ2 = typ1:gsub("%*","[]")
+			return "(ffi.istype('"..typ1.."',"..va..") or ffi.istype('"..typ2.."',"..va.."))"
+		end
+	end
+end
+
+local badtypes = {}
+local function checktype(typ,va,fname)
+	local cond = CHK_types(typ,va)
+	if cond then return cond end
+	
+	if ffi.typeof(typ)==ffi.typeof"const char*" then
+		return "(ffi.istype('"..typ.."',"..va..") or ffi.istype('char[]',"..va..") or type("..va..")=='string')"
+	end
+	
+	cond = CHK_types_p(typ,va)
+	if cond then return cond end
+	
+	cond = CHK_types_p2(typ,va)
+	if cond then return cond end
+	
+	if not tostring(ffi.typeof(typ)):find"struct" then
+		badtypes[typ] = fname or true
+	end
+	if typ:match"%*" and not typ:match"%(%*%)" then --pointer not function pointer
+		local typsinptr = typ:gsub("(%*)","")
+		local extra = " or ffi.istype('"..typsinptr.."',"..va..")"
+		local extra2 = " or ffi.istype('"..typsinptr.."[]',"..va..")"
+		return "(ffi.istype('"..typ.."',"..va..")"..extra..extra2..")"
+	end
+	return "ffi.istype('"..typ.."',"..va..")"
+
 end
 
 local function gen_args(method,def,minvararg)
@@ -317,7 +336,7 @@ local function gen_args(method,def,minvararg)
 	end
 	local ini = 1
 	if method then ini = ini + 1 end
-	if def.nonUDT then ini = ini + 1 end
+	if def.nonUDTno then ini = ini + 1 end
 	for i=ini,n do
 		args = args.."a"..i..","
 	end
@@ -330,12 +349,13 @@ end
 
 --require"anima.utils" --gives us prtable
 local function create_generic(code,defs,method)
+
 	if defs[1].skipped then return end
 	if defs[1].is_static_function then
 		method = nil
 	end
 	
-	if defs[1].nonUDT then print("create_generic nonUTD",defs[1].cimguiname) end
+	if defs[1].nonUDTno then print("create_generic nonUTD",defs[1].cimguiname) end
 	
 	local methodnotconst = method and not defs[1].constructor
 	--find max number of arguments
@@ -365,17 +385,22 @@ local function create_generic(code,defs,method)
 		print()
 	end
 	--]]
+	--if methodnotconst and defs[1].nonUDTno then print("zzzzz",defs[1].cimguiname) end
 	--find first different arg
 	local keys = {}
 	local done = {}
 	local check = {}
 	local maxnargs2 = is_vararg and minvararg-1 or maxnargs
-	for i=1,maxnargs2 do
+	local ini_i= methodnotconst and 2 or 1
+	ini_i= defs[1].nonUDTno and ini_i + 1 or ini_i
+	for i=ini_i,maxnargs2 do
 		keys[i] = {}
 		for j=1,#defs do
 			if not done[j] then
 				local tt = defs[j].argsT[i] and defs[j].argsT[i].type or "nil"
-				keys[i][tt] = (keys[i][tt] or 0) + 1
+				--keys[i][tt] = (keys[i][tt] or 0) + 1
+				keys[i][tt] = keys[i][tt] or {}
+				table.insert(keys[i][tt],j)
 			end
 		end
 		local keycount = 0
@@ -384,27 +409,43 @@ local function create_generic(code,defs,method)
 		for j=1,#defs do
 			if not done[j] then
 				local tt = defs[j].argsT[i] and defs[j].argsT[i].type or "nil"
-				if keycount > 1 then
+				if keycount > 1 then  -- if more than one posible type then keep check
 					check[j] = check[j] or {}
 					check[j][i]=tt
 				end
-				if keys[i][tt] == 1 then 
+				if #keys[i][tt] == 1 then -- if one type is exclusive of one overload we are done
 					done[j]= true;
-					--print(j,defs[j].ov_cimguiname,"done") 
 				end
 			end
 		end
 	end
+	--for j=1,#defs do if not done[j] then print("not done",defs[1].cimguiname) end end
+	--[[
+	--for decision tree
+	local ordered_check = {}
+	for i=1,#check do
+		ordered_check[i] = {}
+		for k,v in pairs(check[i]) do
+			table.insert(ordered_check[i],{k,v})
+		end
+		table.sort(ordered_check[i],function(a,b) return a[1] < b[1] end)
+	end
+	local Tree = {}
+	
 	
 	--if is_vararg then cpp2ffi.prtable(keys,done,check) end
-
+	if defs[1].cimguiname == "igImLerp" then cpp2ffi.prtable(defs,keys,done,check, ordered_check) end
+	--]]
+	--if defs[1].cimguiname == "ImPlot_PlotLine" then cpp2ffi.prtable(defs,keys,done,check) end
+	--for decision tree by variable
+	
 	--do generic--------------
 	local code2 = {}
 	--create args
 	if is_vararg then maxnargs = minvararg-1 end
 	local args = "" --method and "self," or ""
 	if methodnotconst then
-		if defs[1].nonUDT then
+		if defs[1].nonUDTno then
 			for i=3,maxnargs do
 				args = args.."a"..i..","
 			end
@@ -417,7 +458,8 @@ local function create_generic(code,defs,method)
 		args = maxnargs==0 and "ctype" or "ctype,"
 		for i=1,maxnargs do args = args.."a"..i.."," end
 	else
-		if defs[1].nonUDT then
+		if defs[1].nonUDTno then
+			--print("mmmm",defs[1].cimguiname)
 			for i=2,maxnargs do
 				args = args.."a"..i..","
 			end
@@ -446,11 +488,17 @@ local function create_generic(code,defs,method)
 			if v=="nil" then
 				table.insert(code2,"a"..k.."==nil")
 			else
-				local strcode = checktype(v,"a"..k)
+			---------------------which function is using this overloading type
+				-- if v:find"short" and not v:find"%*" then
+					-- print("short",defs[1].cimguiname)
+				-- end
+			-----------------
+				local strcode = checktype(v,"a"..k,fname)
 				--if has a default take nil as valid check
 				--print("defs[i].defaults[k]",defs[i].ov_cimguiname,defs[i].defaults[defs[i].argsT[k].name])
 				if defs[i].defaults[defs[i].argsT[k].name]~=nil then
 					--if defs[i].argsT[k].type~="ImStrv" then 
+					--print("---overload with default",defs[i].ov_cimguiname)
 					strcode = "("..strcode.." or type(a"..k..")=='nil')"
 					--end
 				end
@@ -503,7 +551,7 @@ local function code_for_struct(st,fundefs,structs)
 	testcode(codestr)
 	return codestr
 end
-
+local FREETYPE = false
 --ImGui namespace generator
 local function code_for_imguifuns(st,fundefs,structs)
 	local funs = structs[st]
@@ -513,8 +561,10 @@ local function code_for_imguifuns(st,fundefs,structs)
 	for _,f in ipairs(funs) do
 		local defs = fundefs[f]
 		for _,def in ipairs(defs) do
+			if FREETYPE or (not def.location:match"imgui_freetype") then
 			def.stname = "M"
 			function_gen(code,def)
+			end
 		end
 		--if has overloading create the generic
 		if #defs > 1 then
@@ -536,6 +586,14 @@ local function make_enums(sources)
 				enumsvalues[v.name] = v.calc_value
 			end
 		end
+		local ok,const = pcall(dofile,[[../]]..v..[[/generator/output/constants.lua]])
+		--print("const",v,ok,const)
+		if ok then
+			for key,val in pairs(const) do
+				if val:match"%b()" then val = "M."..val end
+				constants[key] = val
+			end
+		end
 	end
 end
 
@@ -551,7 +609,8 @@ local function make_funcdefs(sources)
 end
 --------------------------------------------------------------
 
-local function class_gen(sources)
+local function class_gen(sources, ft_gen)
+	FREETYPE = ft_gen
 	--firs get enumsvalues table
 	make_enums(sources)
 	local fundefs = make_funcdefs(sources)
@@ -585,7 +644,22 @@ local function class_gen(sources)
 			table.insert(strout,code_for_struct(struct,fundefs, structs))
 		end
 	end)
+	
 	table.insert(strout,code_for_imguifuns("",fundefs, structs))--("ImGui"))
+	
+	------------------------------------
+	print"----------------------------"
+	for k,v in pairs(badtypes) do
+		print("badtype",k,ffi.typeof(k),v)
+	end
+	print"----------------------------"
+	------------------------------------
+	table.insert(strout,"-- _LJ versions")
+	for k,defs in pairs(fundefs) do
+		if #defs == 1 and k:match("_LJ$") then
+			table.insert(strout,"M."..k:gsub("_LJ$","").." = M."..k)
+		end
+	end
 	
 	table.insert(strout,"return M")
 	table.insert(strout,"----------END_AUTOGENERATED_LUA-----------------------------")

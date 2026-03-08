@@ -4,7 +4,7 @@ local igwin = require"imgui.window"
 local win = igwin:GLFW(800,400, "compute graph",{vsync=false})
 local ig = win.ig
 local ffi = require"ffi"
-local serializer = require"serializer"
+local serializer = require"libs.serializer"
 
 local function DFS(G,v)
     G.nodes_explored[v] = true
@@ -224,7 +224,7 @@ local function Node(value,editor,typen,loadT)
         ig.ImNodes_Ez_EndNode();
         
         local dodelete = false
-        local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_X)
+        local user_key = ig.lib.ImGuiKey_X
         if ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and ig.IsKeyReleased(user_key)
         then
             dodelete = true
@@ -261,15 +261,18 @@ local function show_editor(editor)
     ig.Begin(editor.name);
 
     ig.TextUnformatted("A -- add node");
-    ig.TextUnformatted("X -- delete selected node or link");
+    ig.TextUnformatted("X -- delete selected node");
+    ig.TextUnformatted("double left click to delete connection");
 
-    ig.ImNodes_BeginCanvas(editor.context);
+    --ig.ImNodes_BeginCanvas(editor.context);
+	ig.ImNodes_Ez_SetContext(editor.context)
+	ig.ImNodes_Ez_BeginCanvas();
 
     for _, node in pairs(editor.nodes) do
         node:draw()
     end
     
-    local user_key = ig.GetKeyIndex(ig.lib.ImGuiKey_A)
+    local user_key = ig.lib.ImGuiKey_A
     if (ig.IsWindowFocused(ig.lib.ImGuiFocusedFlags_RootAndChildWindows) and ig.IsKeyReleased(user_key))
     then
         ig.OpenPopup("add node")
@@ -285,7 +288,8 @@ local function show_editor(editor)
         end
         ig.EndPopup()
     end
-    ig.ImNodes_EndCanvas()
+    --ig.ImNodes_EndCanvas()
+	ig.ImNodes_Ez_EndCanvas()
     ig.End();
     
         -- The outputs
@@ -373,7 +377,8 @@ local function Editor(name, nodetypes)
         --self.name = loadedE.name
         self.root_nodes = loadedE.root_nodes
     end
-    E.context = ig.CanvasState();
+    --E.context = ig.CanvasState();
+	E.context = ig.ImNodes_Ez_CreateContext();
     return E
 end
 ---------------------------------------use it!!-------------------------------------
